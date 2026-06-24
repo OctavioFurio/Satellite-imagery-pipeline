@@ -163,7 +163,7 @@ struct BitWriter {
 
 struct BitReader {
     const std::vector<uint8_t>& data;
-    size_t   pos  = 0;
+    uint32_t pos  = 0;
     uint32_t buf  = 0;
     int      bits = 0;
 

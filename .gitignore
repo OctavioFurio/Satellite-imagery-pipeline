@@ -69,4 +69,7 @@ Testing/
 .cache/
 
 # testing notebooks
-*.ipynb
+tests.ipynb
+
+# testing images
+images/

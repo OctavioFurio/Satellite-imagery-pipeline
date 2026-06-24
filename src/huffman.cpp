@@ -2,11 +2,6 @@
 #include <cmath>
 #include <cstdint>
 
-// ============================================================
-// Tabelas fixas (padrão JPEG, annexo K)
-// ============================================================
-
-// DC Luma
 static const uint8_t DC_LUMA_BITS[16] = {
     0,1,5,1,1,1,1,1,1,0,0,0,0,0,0,0
 };
@@ -14,7 +9,6 @@ static const uint8_t DC_LUMA_VALS[] = {
     0,1,2,3,4,5,6,7,8,9,10,11
 };
 
-// DC Chroma
 static const uint8_t DC_CHROMA_BITS[16] = {
     0,3,1,1,1,1,1,1,1,1,1,0,0,0,0,0
 };
@@ -22,7 +16,6 @@ static const uint8_t DC_CHROMA_VALS[] = {
     0,1,2,3,4,5,6,7,8,9,10,11
 };
 
-// AC Luma
 static const uint8_t AC_LUMA_BITS[16] = {
     0,2,1,3,3,2,4,3,5,5,4,4,0,0,1,125
 };
@@ -50,7 +43,6 @@ static const uint8_t AC_LUMA_VALS[] = {
     0xf9,0xfa
 };
 
-// AC Chroma
 static const uint8_t AC_CHROMA_BITS[16] = {
     0,2,1,2,4,4,3,4,7,5,4,4,0,1,2,119
 };
@@ -78,10 +70,6 @@ static const uint8_t AC_CHROMA_VALS[] = {
     0xf9,0xfa
 };
 
-// ============================================================
-// Tabela de encode
-// ============================================================
-
 struct HuffTable {
     uint32_t code[256];
     uint8_t  size[256];
@@ -102,10 +90,6 @@ static HuffTable buildHuffTable(const uint8_t bits[16], const uint8_t* vals) {
     }
     return ht;
 }
-
-// ============================================================
-// Tabela de decode
-// ============================================================
 
 struct HuffDecodeTable {
     uint32_t codes[16][256];
@@ -129,10 +113,6 @@ struct HuffDecodeTable {
     int decode(struct BitReader& br) const;
 };
 
-// ============================================================
-// VLI helpers
-// ============================================================
-
 static int category(int val) {
     if (val == 0) return 0;
     val = std::abs(val);
@@ -154,10 +134,6 @@ static int vliDecode(int cat, uint32_t bits) {
     else
         return static_cast<int>(bits) - (2 * threshold - 1);
 }
-
-// ============================================================
-// BitWriter
-// ============================================================
 
 struct BitWriter {
     std::vector<uint8_t>& out;
@@ -184,10 +160,6 @@ struct BitWriter {
         buf = bits = 0;
     }
 };
-
-// ============================================================
-// BitReader
-// ============================================================
 
 struct BitReader {
     const std::vector<uint8_t>& data;
@@ -220,7 +192,6 @@ struct BitReader {
     }
 };
 
-// Implementação separada pois BitReader é definido após HuffDecodeTable
 int HuffDecodeTable::decode(BitReader& br) const {
     for (int len = 0; len < 16; len++) {
         uint32_t candidate = br.peek(len + 1);
@@ -234,10 +205,6 @@ int HuffDecodeTable::decode(BitReader& br) const {
     return -1;
 }
 
-// ============================================================
-// Encode / decode de um bloco 8x8
-// ============================================================
-
 static void encodeBlock(
     const int*       block,
     int&             prevDC,
@@ -245,7 +212,6 @@ static void encodeBlock(
     const HuffTable& acTab,
     BitWriter&       bw)
 {
-    // DC: diferença DPCM
     int dcDiff = block[0] - prevDC;
     prevDC = block[0];
 
@@ -253,7 +219,6 @@ static void encodeBlock(
     bw.write(dcTab.code[cat], dcTab.size[cat]);
     if (cat > 0) bw.write(vliEncode(dcDiff), cat);
 
-    // AC: RLE
     int zeros = 0;
     for (int i = 1; i < 64; i++) {
         int val = block[i];
@@ -261,7 +226,7 @@ static void encodeBlock(
         if (val == 0) { zeros++; continue; }
 
         while (zeros >= 16) {
-            bw.write(acTab.code[0xF0], acTab.size[0xF0]);  // ZRL
+            bw.write(acTab.code[0xF0], acTab.size[0xF0]);
             zeros -= 16;
         }
 
@@ -272,7 +237,6 @@ static void encodeBlock(
         zeros = 0;
     }
 
-    // EOB
     bw.write(acTab.code[0x00], acTab.size[0x00]);
 }
 
@@ -283,21 +247,19 @@ static void decodeBlock(
     const HuffDecodeTable& acTab,
     BitReader&             br)
 {
-    // DC
     int cat = dcTab.decode(br);
     int dcDiff = (cat > 0) ? vliDecode(cat, br.read(cat)) : 0;
     prevDC  += dcDiff;
     block[0] = prevDC;
 
-    // AC
     int i = 1;
     while (i < 64) {
         int sym = acTab.decode(br);
-        if (sym == 0x00) {                          // EOB
+        if (sym == 0x00) {
             while (i < 64) block[i++] = 0;
             break;
         }
-        if (sym == 0xF0) {                          // ZRL: 16 zeros
+        if (sym == 0xF0) {
             for (int z = 0; z < 16 && i < 64; z++) block[i++] = 0;
             continue;
         }
@@ -307,10 +269,6 @@ static void decodeBlock(
         if (i < 64) block[i++] = vliDecode(size, br.read(size));
     }
 }
-
-// ============================================================
-// API pública
-// ============================================================
 
 std::vector<uint8_t> huffman::encode(
     const std::vector<int>& yQuant,
